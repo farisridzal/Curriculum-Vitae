@@ -6,19 +6,17 @@ const skillsData = [
     { name: "HTML/CSS", percentage: 70, category: "web" },
     { name: "Angular", percentage: 20, category: "web" },
     { name: "Node.js", percentage: 30, category: "web" },
-    { name: "REST APIs", percentage: 70, category: "web" },
-    { name: "JSON/XML", percentage: 80, category: "web" },
-    { name: "MySQL", percentage: 80, category: "datenbank" },
+    { name: "REST APIs", percentage: 60, category: "web" },
+    { name: "JSON/XML", percentage: 70, category: "web" },
+    { name: "MySQL", percentage: 50, category: "datenbank" },
     { name: "MongoDB", percentage: 30, category: "datenbank" },
-    { name: "SPS-Programmierung", percentage: 90, category: "automation" },
-    { name: "HMI-Entwicklung", percentage: 70, category: "automation" },
+    { name: "SPS-Programmierung", percentage: 60, category: "automation" },
+    { name: "HMI-Entwicklung", percentage: 50, category: "automation" },
     { name: "Git", percentage: 80, category: "tools" },
-    { name: "Docker", percentage: 40, category: "tools" },
-    { name: "Visual Studio", percentage: 80, category: "tools" },
-    { name: "IntelliJ IDEA", percentage: 60, category: "tools" },
+    { name: "Docker", percentage: 50, category: "tools" },
 ];
 
-let skillsAnimated = false;
+let skillsObserver = null;
 
 // Mobile Navigation Toggle
 const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
@@ -70,9 +68,7 @@ function renderSkills(skills = skillsData) {
     });
 
     // Nach dem Rendern die Animation für die neuen Skills einrichten
-    setTimeout(() => {
-        setupSkillsAnimation();
-    }, 100);
+    setupSkillsAnimation();
 }
 
 // Kategorie-Namen für die Anzeige
@@ -93,7 +89,6 @@ function setupSkillsFilter() {
 
     filterSelect.addEventListener('change', function () {
         const selectedCategory = this.value;
-        const container = document.getElementById('skills-container');
 
         if (selectedCategory === 'alle') {
             // Alle Skills anzeigen
@@ -103,74 +98,49 @@ function setupSkillsFilter() {
             const filteredSkills = skillsData.filter(skill => skill.category === selectedCategory);
             renderSkills(filteredSkills);
         }
-
-        // Nach dem Filtern die Animation zurücksetzen
-        skillsAnimated = false;
-        animateVisibleSkills();
     });
 }
 
-// Animiere nur die sichtbaren Skills
-function animateVisibleSkills() {
-    const progressBars = document.querySelectorAll('.progress');
-
-    progressBars.forEach((progress, index) => {
-        const skillElement = progress.closest('.skill');
-        const skillRect = skillElement.getBoundingClientRect();
-        const isVisible = skillRect.top < window.innerHeight && skillRect.bottom > 0;
-
-        if (isVisible) {
-            const percentage = progress.getAttribute('data-percentage');
+// Balken auf seinen Wert füllen. Zwei Frames warten, damit der Browser
+// zuerst die Breite 0 zeichnet und die CSS-Transition sichtbar abläuft.
+function fillProgressBar(progress, delay = 0) {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
             setTimeout(() => {
-                progress.style.width = percentage + '%';
-            }, index * 100);
-        }
+                progress.style.width = progress.dataset.percentage + '%';
+            }, delay);
+        });
     });
 }
 
-// Verbesserte Skills-Animation mit Intersection Observer
+// Skills-Animation: jeder Balken füllt sich, sobald er ins Bild scrollt
 function setupSkillsAnimation() {
-    if ('IntersectionObserver' in window) {
-        const observerOptions = {
-            threshold: 0.3,
-            rootMargin: '0px'
-        };
+    const skills = document.querySelectorAll('.skill');
 
-        const skillsObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const progress = entry.target.querySelector('.progress');
-                    const percentage = progress.getAttribute('data-percentage');
-
-                    setTimeout(() => {
-                        progress.style.width = percentage + '%';
-                    }, 200);
-
-                    skillsObserver.unobserve(entry.target);
-                }
-            });
-        }, observerOptions);
-
-        // Beobachte alle Skill-Elemente
-        document.querySelectorAll('.skill').forEach(skill => {
-            skillsObserver.observe(skill);
-        });
-    } else {
+    if (!('IntersectionObserver' in window)) {
         // Fallback für ältere Browser
-        animateVisibleSkills();
+        skills.forEach(skill => fillProgressBar(skill.querySelector('.progress')));
+        return;
     }
-}
 
-// Veraltete animateSkills Funktion entfernen und durch setupSkillsAnimation ersetzen
-function checkSkillsVisibility() {
-    const skillsSection = document.querySelector('.skills');
-    const skillsPosition = skillsSection.getBoundingClientRect().top;
-    const screenPosition = window.innerHeight / 1.3;
-
-    if (skillsPosition < screenPosition && !skillsAnimated) {
-        setupSkillsAnimation();
-        skillsAnimated = true;
+    // Alten Observer aufräumen, z. B. nach einem Filterwechsel
+    if (skillsObserver) {
+        skillsObserver.disconnect();
     }
+
+    skillsObserver = new IntersectionObserver((entries, observer) => {
+        let staggerIndex = 0;
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // Balken, die gleichzeitig sichtbar werden, leicht versetzt starten
+                fillProgressBar(entry.target.querySelector('.progress'), staggerIndex * 100);
+                staggerIndex++;
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.3 });
+
+    skills.forEach(skill => skillsObserver.observe(skill));
 }
 
 // Aktiver Navigationslink beim Scrollen
@@ -249,22 +219,23 @@ function setupIntersectionObserver() {
 // Event Listeners
 window.addEventListener('scroll', () => {
     updateActiveNavLink();
-    checkSkillsVisibility();
     animateTimeline();
 });
 
 // Initialisierung beim Laden der Seite
 window.addEventListener('load', () => {
-    renderSkills();
-    setupSkillsFilter();
     setupIntersectionObserver();
-    checkSkillsVisibility();
     animateTimeline();
 });
 
-// Initialisierung
+// Skills nur einmal rendern, sobald das HTML bereit ist
 document.addEventListener('DOMContentLoaded', () => {
     renderSkills();
     setupSkillsFilter();
-    // Skills-Animation wird durch setupSkillsAnimation in renderSkills aufgerufen
 });
+
+// Aktuelles Jahr im Footer
+const currentYearEl = document.getElementById('current-year');
+if (currentYearEl) {
+    currentYearEl.textContent = new Date().getFullYear();
+}
